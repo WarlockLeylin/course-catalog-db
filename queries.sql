@@ -65,3 +65,18 @@ FROM courses c
 LEFT JOIN enrollments e ON e.course_id = c.id
 GROUP BY c.id
 ORDER BY enrolled DESC, c.id ASC;
+
+-- Query 7: IDs of courses nobody is enrolled in (alphabetical order)
+SELECT c.id
+FROM courses c
+LEFT JOIN enrollments e ON c.id = e.course_id
+WHERE e.id IS NULL
+ORDER BY c.id;
+
+-- Query 8: Student name and number of courses for students with > 1 course
+SELECT s.name, count(e.course_id) AS courses
+FROM students s
+JOIN enrollments e ON s.id = e.student_id
+GROUP BY s.id, s.name
+HAVING count(e.course_id) > 1
+ORDER BY courses DESC, s.name;

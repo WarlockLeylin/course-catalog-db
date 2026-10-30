@@ -140,3 +140,33 @@ Scenario: enroll a new student in a course — two inserts in one transaction.
 | Deletion | Yes — delete behavior (`RESTRICT` vs `CASCADE`) chosen deliberately. |
 | Normalization | Yes — data properly normalized into three tables, avoiding update/delete anomalies. |
 | Indexes and names | Yes — foreign keys and key columns indexed, consistent `snake_case` naming. |
+
+## Bonus
+
+### Task 1: Normalization and 3 Anomalies
+We experimented with a flat `registrations` table containing duplicated student and course data, and observed three classic database anomalies:
+- **Update Anomaly:** Renaming a course title in a single row leaves the database in an inconsistent state where the same course has multiple titles.
+- **Delete Anomaly:** Deleting the only enrollment for a course causes the course details to disappear completely, because they lived only inside the enrollment rows.
+- **Insert Anomaly:** Adding a course with no enrollments requires storing an empty/null student placeholder. 
+
+**How normalization fixes them:** Splitting the data into normalized tables (`students`, `courses`, and `enrollments`) removes data duplication. Courses (including those with zero enrollments, such as `api-design`, `databases-postgresql`, and `web-security`) now live safely in their own table, completely independent of whether students are currently enrolled.
+
+### Task 2: Lost Update and Row Locks
+- **The Problem:** In a "read — compute in program — write back" scheme, two clients read the same value (e.g., `11`), independently calculate `12`, and write it back. As a result, two operations result in a net increase of only 1 (value becomes `12` instead of `13`), causing a **lost update**.
+- **The Solution (`UPDATE ... SET likes = likes + 1`)**: Executing the increment directly inside the database engine ensures atomicity. When Window A holds an active transaction modifying the row, Window B's update statement automatically waits (blocks) via a **row-level lock** until A commits. Once released, B re-reads the fresh value (`12`), adds one, and correctly saves `13`.
+
+### Task 3: SQL Injection and Prepared Statements
+- **Vulnerability of Concatenation:** If user input is directly concatenated into a SQL string, malicious payloads like `'x' OR '1'='1'` alter the query logic, turning the condition into a tautology that bypasses authentication and returns all rows.
+- **Safety of Prepared Statements / Parameters:** When using parameters or prepared statements (`PREPARE` / `EXECUTE`), the database engine treats the entire input strictly as a literal data value, never as executable SQL syntax. Searching for `x' OR '1'='1'` looks for a course literal matching that exact string, safely returning 0 rows.
+
+### Task 4: Additional Queries
+- **Query 7 (Courses without enrollments):** Uses a `LEFT JOIN` on `enrollments` paired with `WHERE e.id IS NULL` to isolate courses that have no active student references.
+- **Query 8 (Active students):** Uses `GROUP BY` combined with `HAVING count(*) > 1` to filter and return students enrolled in more than one course, ordered by course count descending.
+
+### Task 5: Live Schema Migration (`ALTER TABLE`)
+To enforce that a student's email must contain an `@` sign without wiping the existing database, we applied a live constraint:
+```sql
+ALTER TABLE students ADD CONSTRAINT students_email_format CHECK (position('@' IN email) > 1);
+```
+
+The database verifies all existing rows first and rejects the operation if any row violates the rule. This same rule has now been added directly to schema.sql for future deployments.
