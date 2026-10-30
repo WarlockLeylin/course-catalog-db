@@ -1,4 +1,4 @@
--- schema.sql: схема базы данных каталога курсов
+-- schema.sql: database
 DROP TABLE IF EXISTS enrollments, students, courses;
 
 CREATE TABLE courses (
@@ -24,5 +24,5 @@ CREATE TABLE enrollments (
     UNIQUE (course_id, student_id)
 );
 
--- Индекс на внешний ключ student_id (из Шага 6)
+-- Step 6
 CREATE INDEX enrollments_student_id_idx ON enrollments (student_id);
